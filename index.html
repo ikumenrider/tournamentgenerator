@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トーナメント表アプリ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .tournament-bracket {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(min-content, 200px);
+            gap: 2rem;
+            align-items: center;
+        }
+        .round {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+        }
+        .match {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        .match-card {
+            background-color: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+        }
+        .match-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .player-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.25rem;
+        }
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        .match-card.winner {
+            background-color: #d1fae5;
+            border-color: #34d399;
+        }
+        .match-card.loser {
+            opacity: 0.5;
+        }
+        .line {
+            position: absolute;
+            background-color: #94a3b8;
+            z-index: -1;
+        }
+        .line-horizontal {
+            height: 2px;
+            width: 2rem;
+            left: 100%;
+            top: 50%;
+        }
+        .line-vertical {
+            width: 2px;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .player-name {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            background-color: #f7fafc;
+            text-align: center;
+        }
+        .player-name:hover {
+            background-color: #e2e8f0;
+            transform: scale(1.02);
+        }
+        .player-name.winner {
+            background-color: #86efac;
+            border-color: #10b981;
+            font-weight: bold;
+        }
+        .player-name.loser {
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center p-8 min-h-screen">
+
+    <div class="container mx-auto p-8 bg-white rounded-xl shadow-2xl max-w-full">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">トーナメント表アプリ</h1>
+        
+        <div id="setup-container">
+            <h2 class="text-2xl font-semibold mb-4 text-center text-gray-700">参加選手名を入力してください（改行区切り）</h2>
+            <textarea id="player-names-textarea" rows="8" class="w-full px-4 py-2 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2" placeholder="選手名1&#10;選手名2&#10;..."></textarea>
+            <div class="flex justify-between items-center mb-4">
+                <span id="player-count" class="text-gray-600 text-sm">現在 0 人入力済み</span>
+                <button id="generateBracket" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors">トーナメント表を生成</button>
+            </div>
+        </div>
+
+        <div id="bracket-container" class="overflow-x-auto p-4 bg-gray-50 rounded-lg shadow-inner hidden">
+            <!-- トーナメント表がここに動的に挿入されます -->
+        </div>
+
+        <div id="ranking-container" class="mt-8 p-4 bg-gray-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-semibold text-center mb-4 text-gray-700">最終順位</h2>
+            <ol id="ranking-list" class="list-decimal list-inside text-lg text-gray-800 space-y-2">
+                <!-- 順位表がここに動的に挿入されます -->
+            </ol>
+        </div>
+        
+        <div class="flex justify-end space-x-4 mt-4" id="bracket-buttons" style="display:none;">
+            <button id="regenerateBracket" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors">トーナメントを組みなおす</button>
+            <button id="resetBracket" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors">リセット</button>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const setupContainer = document.getElementById('setup-container');
+            const playerNamesTextarea = document.getElementById('player-names-textarea');
+            const generateButton = document.getElementById('generateBracket');
+            const bracketContainer = document.getElementById('bracket-container');
+            const rankingContainer = document.getElementById('ranking-container');
+            const regenerateButton = document.getElementById('regenerateBracket');
+            const resetButton = document.getElementById('resetBracket');
+            const bracketButtonsDiv = document.getElementById('bracket-buttons');
+            const playerCountSpan = document.getElementById('player-count'); // 新しい要素
+
+            let players = [];
+            let originalPlayers = [];
+            let matches = [];
+            let semifinalLosers = []; // 準決勝の敗者を一時的に保持する配列
+            let semifinalWinners = []; // 準決勝の勝者を一時的に保持する配列
+            let rankings = {}; // 順位を記録するオブジェクト
+
+            // テキストエリアの入力イベントを監視して選手数を更新
+            playerNamesTextarea.addEventListener('input', updatePlayerCount);
+
+            function updatePlayerCount() {
+                const count = playerNamesTextarea.value.split('\n').map(name => name.trim()).filter(name => name !== '').length;
+                playerCountSpan.textContent = `現在 ${count} 人入力済み`;
+            }
+
+            generateButton.addEventListener('click', () => {
+                players = playerNamesTextarea.value.split('\n').map(name => name.trim()).filter(name => name !== '');
+                
+                // 3位決定戦のため最低4人必要
+                if (players.length < 4) {
+                    showMessage('3位決定戦と4位までの順位付けには選手を4人以上入力してください。', 'warning');
+                    return;
+                }
+                
+                originalPlayers = [...players]; // 元の参加者リストを保存
+                generateTournamentBracket(players);
+                
+                setupContainer.classList.add('hidden');
+                bracketContainer.classList.remove('hidden');
+                rankingContainer.classList.remove('hidden');
+                bracketButtonsDiv.style.display = 'flex';
+            });
+            
+            // リセットボタンのイベントリスナー
+            resetButton.addEventListener('click', resetApp);
+            
+            // 組みなおすボタンのイベントリスナー
+            regenerateButton.addEventListener('click', () => {
+                // 最終順位の表示をクリア
+                clearRankings();
+                // 参加メンバーを変えずにトーナメントを再生成
+                generateTournamentBracket(originalPlayers);
+            });
+
+            function resetApp() {
+                bracketContainer.innerHTML = '';
+                setupContainer.classList.remove('hidden');
+                bracketContainer.classList.add('hidden');
+                rankingContainer.classList.add('hidden');
+                bracketButtonsDiv.style.display = 'none';
+                playerNamesTextarea.value = '';
+                updatePlayerCount(); // 選手数をリセット
+                players = [];
+                originalPlayers = [];
+                matches = [];
+                semifinalLosers = [];
+                semifinalWinners = [];
+                rankings = {};
+            }
+
+            function clearRankings() {
+                rankings = {};
+                const rankingList = document.getElementById('ranking-list');
+                rankingList.innerHTML = '';
+            }
+
+            function generateTournamentBracket(allPlayers) {
+                // bracket-containerをクリア
+                bracketContainer.innerHTML = '';
+
+                const numPlayers = allPlayers.length;
+                let nextPowerOfTwo = Math.pow(2, Math.ceil(Math.log2(numPlayers)));
+                const numByes = nextPowerOfTwo - numPlayers;
+                
+                // 選手をシャッフル
+                const shuffledPlayers = shuffleArray([...allPlayers]);
+
+                matches = [];
+                let roundPlayers = [];
+                
+                // 不戦勝を配置するロジック
+                let firstRoundMatches = [];
+                let playersWithByes = shuffledPlayers.slice(0, numByes);
+                let remainingPlayers = shuffledPlayers.slice(numByes);
+
+                // 不戦勝と対戦する選手ペアを作成
+                for (let i = 0; i < numByes; i++) {
+                    firstRoundMatches.push([playersWithByes[i], '不戦勝']);
+                }
+
+                // 残りの選手をペアにする
+                while (remainingPlayers.length > 0) {
+                    firstRoundMatches.push([remainingPlayers.pop(), remainingPlayers.pop()]);
+                }
+
+                // ペアの順序をランダムにシャッフル
+                firstRoundMatches = shuffleArray(firstRoundMatches);
+
+                // 第1ラウンドの対戦カードを生成
+                const roundMatches = [];
+                for (let i = 0; i < firstRoundMatches.length; i++) {
+                    const match = {
+                        id: `0-${i}`,
+                        player1: firstRoundMatches[i][0],
+                        player2: firstRoundMatches[i][1],
+                        winner: null,
+                        loser: null,
+                        isSemifinal: false // 初期値はfalse
+                    };
+                    roundMatches.push(match);
+                }
+                matches.push(roundMatches);
+                
+                // 第2ラウンド以降の対戦カードは空のままにしておく
+                let nextRoundPlayers = new Array(firstRoundMatches.length).fill(null);
+                let roundIndex = 1;
+                while (nextRoundPlayers.length > 2) {
+                    const nextRoundMatches = [];
+                    for(let i = 0; i < nextRoundPlayers.length / 2; i++) {
+                        const match = {
+                            id: `${roundIndex}-${i}`,
+                            player1: null,
+                            player2: null,
+                            winner: null,
+                            loser: null,
+                            isSemifinal: false // 初期値はfalse
+                        };
+                        nextRoundMatches.push(match);
+                    }
+                    matches.push(nextRoundMatches);
+                    nextRoundPlayers = new Array(nextRoundPlayers.length / 2).fill(null);
+                    roundIndex++;
+                }
+
+                
+                // 3位決定戦のラウンドを追加
+                if (numPlayers >= 4) {
+                    const thirdPlaceMatch = [{
+                        id: `${matches.length}-${0}`,
+                        player1: null,
+                        player2: null,
+                        winner: null,
+                        loser: null,
+                        isThirdPlaceMatch: true
+                    }];
+                    matches.push(thirdPlaceMatch);
+                }
+                
+                // 決勝戦のラウンドを追加
+                const finalRound = [{
+                    id: `${matches.length}-${0}`,
+                    player1: null,
+                    player2: null,
+                    winner: null,
+                    loser: null,
+                    isFinalMatch: true
+                }];
+                matches.push(finalRound);
+
+                // 準決勝ラウンドを正しく特定するロジック
+                // 決勝戦と3位決定戦の2ラウンドを除いた直前のラウンドが準決勝
+                const semifinalRoundIndex = matches.length - 3;
+                if (semifinalRoundIndex >= 0) {
+                    matches[semifinalRoundIndex].forEach(match => {
+                        match.isSemifinal = true;
+                    });
+                }
+
+
+                // UIにトーナメント表を描画
+                const bracket = document.createElement('div');
+                bracket.className = 'tournament-bracket';
+                bracketContainer.appendChild(bracket);
+                
+                for (let i = 0; i < matches.length; i++) {
+                    const roundDiv = document.createElement('div');
+                    roundDiv.className = 'round flex-shrink-0';
+                    const roundTitle = document.createElement('h2');
+                    roundTitle.className = 'text-center font-bold text-gray-600 text-xl mb-4';
+
+                    if (matches[i][0].isFinalMatch) {
+                         roundTitle.textContent = `決勝`;
+                    } else if (matches[i][0].isThirdPlaceMatch) {
+                        roundTitle.textContent = `3位決定戦`;
+                    } else {
+                        roundTitle.textContent = `第${i+1}ラウンド`;
+                    }
+                    
+                    roundDiv.appendChild(roundTitle);
+
+                    matches[i].forEach((match, j) => {
+                        const matchDiv = createMatchCard(match, i, j);
+                        roundDiv.appendChild(matchDiv);
+                    });
+
+                    bracket.appendChild(roundDiv);
+                }
+                
+                // トーナメント表の線を引く
+                drawLines();
+            }
+
+            function drawLines() {
+                const rounds = document.querySelectorAll('.round');
+                for (let i = 0; i < rounds.length - 1; i++) {
+                    const currentRound = rounds[i];
+                    const nextRound = rounds[i + 1];
+                    const matchesInCurrentRound = currentRound.querySelectorAll('.match');
+                    
+                    matchesInCurrentRound.forEach((matchDiv, matchIndex) => {
+                        const matchCardHeight = matchDiv.querySelector('.match-card').offsetHeight;
+                        
+                        // 次のラウンドへの横線を引く
+                        const lineHorizontal = document.createElement('div');
+                        lineHorizontal.className = 'line line-horizontal absolute';
+                        lineHorizontal.style.top = `calc(50% - ${matchCardHeight / 2}px)`;
+                        matchDiv.appendChild(lineHorizontal);
+
+                        // 縦線を引く (2試合ごとに)
+                        if (matchIndex % 2 === 0 && i < rounds.length - 2) {
+                            const nextMatchDiv = nextRound.querySelector(`[data-match-index="${Math.floor(matchIndex / 2)}"]`);
+                            if (!nextMatchDiv) return;
+
+                            const currentMatchRect = matchDiv.getBoundingClientRect();
+                            const nextMatchRect = nextMatchDiv.getBoundingClientRect();
+
+                            const lineVertical = document.createElement('div');
+                            lineVertical.className = 'line line-vertical absolute';
+                            lineVertical.style.left = '100%';
+                            
+                            const currentTop = currentMatchRect.top + currentMatchRect.height / 2;
+                            const nextTop = nextMatchRect.top + nextMatchRect.height / 2;
+                            const lineLength = nextTop - currentTop;
+
+                            lineVertical.style.top = `calc(50% - ${matchCardHeight / 2}px)`;
+                            lineVertical.style.height = `${lineLength + 2}px`;
+                            
+                            matchDiv.appendChild(lineVertical);
+                        }
+                    });
+                }
+            }
+
+            function createMatchCard(match, roundIndex, matchIndex) {
+                const matchDiv = document.createElement('div');
+                matchDiv.className = 'match';
+                matchDiv.dataset.roundIndex = roundIndex;
+                matchDiv.dataset.matchIndex = matchIndex;
+
+                const matchCard = document.createElement('div');
+                matchCard.className = 'match-card';
+
+                const player1Div = document.createElement('div');
+                player1Div.textContent = match.player1;
+                player1Div.className = `player-name px-2 py-1 ${match.player1 === '不戦勝' ? 'opacity-50 cursor-default' : ''}`;
+                player1Div.dataset.player = 1;
+                matchCard.appendChild(player1Div);
+
+                const player2Div = document.createElement('div');
+                player2Div.textContent = match.player2;
+                player2Div.className = `player-name px-2 py-1 ${match.player2 === '不戦勝' ? 'opacity-50 cursor-default' : ''}`;
+                player2Div.dataset.player = 2;
+                matchCard.appendChild(player2Div);
+
+                // イベントリスナーを選手のdivにアタッチ
+                if (match.player1 !== '不戦勝') {
+                    player1Div.addEventListener('click', () => {
+                        toggleWinner(matchDiv, matches, match.player1);
+                    });
+                }
+                if (match.player2 !== '不戦勝') {
+                    player2Div.addEventListener('click', () => {
+                        toggleWinner(matchDiv, matches, match.player2);
+                    });
+                }
+
+                matchDiv.appendChild(matchCard);
+                
+                // 不戦勝がある場合は自動的に勝者としてマーク
+                if (match.player1 === '不戦勝' || match.player2 === '不戦勝') {
+                    const winner = match.player1 === '不戦勝' ? match.player2 : match.player1;
+                    if (winner) {
+                        toggleWinner(matchDiv, matches, winner);
+                    }
+                }
+
+                return matchDiv;
+            }
+
+            function toggleWinner(matchDiv, matches, specificWinner) {
+                const roundIndex = parseInt(matchDiv.dataset.roundIndex);
+                const matchIndex = parseInt(matchDiv.dataset.matchIndex);
+                const match = matches[roundIndex][matchIndex];
+                const loser = (specificWinner === match.player1) ? match.player2 : match.player1;
+
+                // 準決勝かどうかの判定を、isSemifinalプロパティを使用するように変更
+                const isSemifinal = match.isSemifinal;
+                
+                // 選手が「不戦勝」の場合は選択不可
+                if (specificWinner === '不戦勝' && (match.player1 !== '不戦勝' || match.player2 !== '不戦勝')) {
+                    showMessage('不戦勝は勝者になれません。', 'warning');
+                    return;
+                }
+                
+                // 同じ選手が再度クリックされた場合はリセット
+                if (match.winner === specificWinner) {
+                    match.winner = null;
+                    match.loser = null;
+                    
+                    const matchCard = matchDiv.querySelector('.match-card');
+                    const player1Div = matchDiv.querySelector('[data-player="1"]');
+                    const player2Div = matchDiv.querySelector('[data-player="2"]');
+
+                    matchCard.classList.remove('winner');
+                    player1Div.classList.remove('winner', 'loser');
+                    player2Div.classList.remove('winner', 'loser');
+                    
+                    // 次のラウンドの選手をリセット
+                    if (isSemifinal) {
+                        // 準決勝の場合、決勝戦と3位決定戦の選手をリセット
+                        const finalMatch = matches.find(r => r[0].isFinalMatch);
+                        const thirdPlaceMatch = matches.find(r => r[0].isThirdPlaceMatch);
+                        if(finalMatch) finalMatch[0].player1 = finalMatch[0].player2 = null;
+                        if(thirdPlaceMatch) thirdPlaceMatch[0].player1 = thirdPlaceMatch[0].player2 = null;
+                        semifinalWinners = semifinalWinners.filter(p => p !== specificWinner);
+                        semifinalLosers = semifinalLosers.filter(p => p !== loser);
+                    } else if(roundIndex + 1 < matches.length) {
+                        const nextRoundMatches = matches[roundIndex + 1];
+                        const nextMatchIndex = Math.floor(matchIndex / 2);
+                        
+                        if (nextRoundMatches[nextMatchIndex]) {
+                            if (matchIndex % 2 === 0) {
+                                nextRoundMatches[nextMatchIndex].player1 = null;
+                            } else {
+                                nextRoundMatches[nextMatchIndex].player2 = null;
+                            }
+                        }
+                    }
+                    updateUi();
+                    updateRankings();
+                    return;
+                }
+
+                match.winner = specificWinner;
+                match.loser = loser;
+
+                // 準決勝の場合、勝者と敗者を一時的に保持
+                if (isSemifinal) {
+                    // 以前の勝者・敗者を削除し、新しい勝者・敗者を追加
+                    if (match.winner && match.winner !== '不戦勝') {
+                        semifinalWinners = semifinalWinners.filter(p => p !== match.winner);
+                        semifinalWinners.push(match.winner);
+                    }
+                    if (match.loser && match.loser !== '不戦勝') {
+                        semifinalLosers = semifinalLosers.filter(p => p !== match.loser);
+                        semifinalLosers.push(match.loser);
+                    }
+                }
+
+                // UIの更新
+                const matchCard = matchDiv.querySelector('.match-card');
+                const player1Div = matchDiv.querySelector('[data-player="1"]');
+                const player2Div = matchDiv.querySelector('[data-player="2"]');
+
+                matchCard.classList.remove('winner');
+                player1Div.classList.remove('winner', 'loser');
+                player2Div.classList.remove('winner', 'loser');
+
+                if (specificWinner === match.player1) {
+                    matchCard.classList.add('winner');
+                    player1Div.classList.add('winner');
+                    player2Div.classList.add('loser');
+                } else {
+                    matchCard.classList.add('winner');
+                    player2Div.classList.add('winner');
+                    player1Div.classList.add('loser');
+                }
+                
+                // 次のラウンドに勝者を昇格させる
+                if (roundIndex + 1 < matches.length) {
+                    const nextRoundMatches = matches[roundIndex + 1];
+                    const nextMatchIndex = Math.floor(matchIndex / 2);
+                    
+                    if (nextRoundMatches[nextMatchIndex]) {
+                        if (matchIndex % 2 === 0) {
+                            nextRoundMatches[nextMatchIndex].player1 = specificWinner;
+                        } else {
+                            nextRoundMatches[nextMatchIndex].player2 = specificWinner;
+                        }
+                    }
+                }
+                
+                updateUi();
+                updateRankings();
+            }
+            
+            function updateUi() {
+                matches.forEach((round, i) => {
+                    round.forEach((match, j) => {
+                        const matchDiv = document.querySelector(`[data-round-index="${i}"][data-match-index="${j}"]`);
+                        if (!matchDiv) return;
+
+                        const player1Div = matchDiv.querySelector('[data-player="1"]');
+                        const player2Div = matchDiv.querySelector('[data-player="2"]');
+
+                        // 準決勝の勝敗が確定したら、決勝戦と3位決定戦の選手をセット
+                        if (match.isThirdPlaceMatch && semifinalLosers.length === 2) {
+                             match.player1 = semifinalLosers[0];
+                             match.player2 = semifinalLosers[1];
+                        }
+                        if (match.isFinalMatch && semifinalWinners.length === 2) {
+                             match.player1 = semifinalWinners[0];
+                             match.player2 = semifinalWinners[1];
+                        }
+                        
+                        player1Div.textContent = match.player1 || '';
+                        player2Div.textContent = match.player2 || '';
+                        
+                        // プレイヤー名がnullの場合、要素を非表示にする
+                        if (match.player1 === null) {
+                            player1Div.classList.add('hidden');
+                        } else {
+                            player1Div.classList.remove('hidden');
+                        }
+
+                        if (match.player2 === null) {
+                            player2Div.classList.add('hidden');
+                        } else {
+                            player2Div.classList.remove('hidden');
+                        }
+
+                        // 勝者と敗者のクラスを更新
+                        const matchCard = matchDiv.querySelector('.match-card');
+                        matchCard.classList.remove('winner');
+                        player1Div.classList.remove('winner', 'loser');
+                        player2Div.classList.remove('winner', 'loser');
+                        
+                        if (match.winner === match.player1) {
+                            matchCard.classList.add('winner');
+                            player1Div.classList.add('winner');
+                            player2Div.classList.add('loser');
+                        } else if (match.winner === match.player2) {
+                            matchCard.classList.add('winner');
+                            player2Div.classList.add('winner');
+                            player1Div.classList.add('loser');
+                        }
+                    });
+                });
+            }
+
+
+            function updateRankings() {
+                const finalMatch = matches.find(round => round.length === 1 && round[0].isFinalMatch);
+                const thirdPlaceMatch = matches.find(round => round.length === 1 && round[0].isThirdPlaceMatch);
+                
+                rankings = {};
+                if (finalMatch && finalMatch[0].winner) {
+                    rankings['1位'] = finalMatch[0].winner;
+                }
+                if (finalMatch && finalMatch[0].loser) {
+                    rankings['2位'] = finalMatch[0].loser;
+                }
+                if (thirdPlaceMatch && thirdPlaceMatch[0].winner) {
+                    rankings['3位'] = thirdPlaceMatch[0].winner;
+                }
+                if (thirdPlaceMatch && thirdPlaceMatch[0].loser) {
+                    rankings['4位'] = thirdPlaceMatch[0].loser;
+                }
+
+                const rankingList = document.getElementById('ranking-list');
+                rankingList.innerHTML = '';
+                
+                Object.keys(rankings).forEach(rank => {
+                    const player = rankings[rank];
+                    if (player && player !== '不戦勝') {
+                        const li = document.createElement('li');
+                        li.textContent = `${rank}: ${player}`;
+                        if (rank === '1位') {
+                            li.className = 'font-bold text-green-600';
+                        }
+                        rankingList.appendChild(li);
+                    }
+                });
+            }
+            
+            // 配列をシャッフルする関数
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // メッセージボックスの実装（alertの代わり）
+            function showMessage(message, type = 'info') {
+                const messageBox = document.createElement('div');
+                messageBox.className = `fixed bottom-4 right-4 p-4 rounded-lg text-white shadow-lg transition-transform transform translate-y-0 duration-500 z-50`;
+                
+                if (type === 'error') {
+                    messageBox.style.backgroundColor = '#f87171'; // red-400
+                } else if (type === 'warning') {
+                    messageBox.style.backgroundColor = '#fbbf24'; // amber-400
+                } else {
+                    messageBox.style.backgroundColor = '#60a5fa'; // blue-400
+                }
+
+                messageBox.textContent = message;
+                document.body.appendChild(messageBox);
+                
+                setTimeout(() => {
+                    messageBox.classList.add('translate-y-full');
+                    messageBox.addEventListener('transitionend', () => messageBox.remove());
+                }, 3000);
+            }
+
+            // 初期表示時の選手数を更新
+            updatePlayerCount();
+        });
+    </script>
+</body>
+</html>
