@@ -107,7 +107,22 @@
 </head>
 <body class="bg-gray-100 flex items-center justify-center p-8 min-h-screen">
 
-    <div class="container mx-auto p-8 bg-white rounded-xl shadow-2xl max-w-full">
+    <div class="container mx-auto p-8 bg-white rounded-xl shadow-2xl max-w-full relative">
+        <!-- バージョン情報と製作者情報を直接配置 -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex items-center space-x-2">
+                <span class="text-sm font-semibold text-gray-500">Version:</span>
+                <span class="text-sm font-bold text-gray-700">1.0</span>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <span class="text-sm font-semibold text-gray-500">製作者:</span>
+                <a href="https://youtube.com/@ikumenrider?si=LXddF5sxgnGMxwHd" target="_blank" class="p-1 px-3 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition-all duration-200 transform hover:scale-105 hover:bg-gray-300">
+                    育面ライダー
+                </a>
+            </div>
+        </div>
+
         <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">トーナメント表アプリ</h1>
         
         <div id="setup-container">
@@ -133,6 +148,13 @@
         <div class="flex justify-end space-x-4 mt-4" id="bracket-buttons" style="display:none;">
             <button id="regenerateBracket" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors">トーナメントを組みなおす</button>
             <button id="resetBracket" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors">リセット</button>
+        </div>
+
+        <!-- アプリ一覧ボタンを真ん中の一番下に配置 -->
+        <div class="flex justify-center mt-8">
+            <a id="btn-app-list" href="https://ikumenrider.github.io/ikumenrider/" target="_blank" class="p-3 px-5 bg-green-300 text-gray-900 font-bold rounded-xl shadow-lg hover:bg-green-400 transition-all duration-200 transform hover:scale-105">
+                アプリ一覧
+            </a>
         </div>
 
     </div>
